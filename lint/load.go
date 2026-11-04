@@ -61,17 +61,25 @@ func Open(ctx context.Context, spec string) (*Repository, error) {
 		}
 		r.Location.Host, r.Location.Namespace, _ = strings.Cut(strings.TrimSuffix(hostPath, "/"), "/")
 
-		var client *auth.Client
-		client, err = dockerClient()
-		if err == nil {
-			r.repo, err = ocirepo.NewFromOCIRepoV1(ctx, &ocispec.Repository{BaseUrl: spec}, client, oci.WithTempDir(tempDir))
-		}
+		r.repo, err = openOCI(ctx, spec, tempDir)
 	}
 	if err != nil {
 		_ = os.RemoveAll(tempDir)
 		return nil, fmt.Errorf("open %s: %w", spec, err)
 	}
 	return r, nil
+}
+
+func openOCI(ctx context.Context, spec, tempDir string) (*oci.Repository, error) {
+	client, err := dockerClient()
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := ocirepo.NewResolver(ctx, client, &ocispec.Repository{BaseUrl: spec})
+	if err != nil {
+		return nil, err
+	}
+	return oci.NewRepository(oci.WithTempDir(tempDir), oci.WithResolver(resolver))
 }
 
 func dockerClient() (*auth.Client, error) {
