@@ -1,28 +1,11 @@
-package airgap_test
+package rules_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/rebEllieous/ocm-lint-solar/internal/fixture"
 	"github.com/rebEllieous/ocm-lint-solar/lint"
-	_ "github.com/rebEllieous/ocm-lint-solar/rules/airgap"
 )
-
-func run(t *testing.T, id string, tg *lint.Target) []lint.Finding {
-	t.Helper()
-	for _, r := range lint.Default.All() {
-		if r.ID() == id {
-			f, err := r.Check(context.Background(), tg)
-			if err != nil {
-				t.Fatalf("%s: %v", id, err)
-			}
-			return f
-		}
-	}
-	t.Fatalf("rule %s not registered", id)
-	return nil
-}
 
 var registryLoc = lint.Location{Spec: "reg.local:5000/catalog", Host: "reg.local:5000", Namespace: "catalog"}
 
@@ -44,6 +27,7 @@ func TestNoExternalAccess(t *testing.T) {
 		{"ctf has no host", oci("i", "ociImage", "reg.local:5000/catalog/app:1"), lint.Location{Spec: "ctf::x"}, nil, 1},
 		{"unparsable reference", oci("i", "ociImage", "UPPER CASE::bad"), registryLoc, nil, 1},
 		{"global access checked", `{"name":"g","version":"1.0.0","type":"ociImage","relation":"local","access":{"type":"localBlob","localReference":"sha256:00","mediaType":"application/vnd.oci.image.manifest.v1+tar","referenceName":"x","globalAccess":{"type":"ociArtifact","imageReference":"ghcr.io/acme/app:1"}}}`, registryLoc, nil, 1},
+		{"global access without a type", `{"name":"g","version":"1.0.0","type":"blob","relation":"local","access":{"type":"localBlob","localReference":"sha256:00","mediaType":"application/octet-stream","globalAccess":{"imageReference":"ghcr.io/acme/app:1"}}}`, registryLoc, nil, 1},
 		{"local blob alone is fine", fixture.LocalBlobResource("v", "yaml", "application/x-yaml", "", ""), registryLoc, nil, 0},
 		{"helm repository access", `{"name":"h","version":"1.0.0","type":"helmChart","relation":"external","access":{"type":"helm/v1","helmRepository":"https://charts.example.com","helmChart":"app:1.0.0"}}`, registryLoc, nil, 1},
 		{"wget access", `{"name":"w","version":"1.0.0","type":"blob","relation":"external","access":{"type":"wget/v1","url":"https://example.com/x.tgz"}}`, registryLoc, nil, 1},

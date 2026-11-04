@@ -1,30 +1,16 @@
-package solar_test
+package rules_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	"github.com/rebEllieous/ocm-lint-solar/internal/fixture"
 	"github.com/rebEllieous/ocm-lint-solar/lint"
-	_ "github.com/rebEllieous/ocm-lint-solar/rules/solar"
 )
 
-func run(t *testing.T, id, resources string) []lint.Finding {
-	t.Helper()
-	d := fixture.Descriptor(t, fixture.Component("acme.org/app", "1.0.0", resources, ""))
-	tg := lint.NewTarget(d, fixture.Repo(), lint.Location{}, lint.Options{})
-	for _, r := range lint.Default.All() {
-		if r.ID() == id {
-			f, err := r.Check(context.Background(), tg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return f
-		}
-	}
-	t.Fatalf("rule %s not registered", id)
-	return nil
+func resources(t *testing.T, res string) *lint.Target {
+	d := fixture.Descriptor(t, fixture.Component("acme.org/app", "1.0.0", res, ""))
+	return lint.NewTarget(d, fixture.Repo(), lint.Location{}, lint.Options{})
 }
 
 func TestSolar(t *testing.T) {
@@ -60,7 +46,7 @@ func TestSolar(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := run(t, tt.rule, tt.res); len(got) != tt.count {
+			if got := run(t, tt.rule, resources(t, tt.res)); len(got) != tt.count {
 				t.Fatalf("%d findings, want %d: %+v", len(got), tt.count, got)
 			}
 		})
@@ -68,7 +54,7 @@ func TestSolar(t *testing.T) {
 }
 
 func TestMissingTemplateMessageNamesTheConsequence(t *testing.T) {
-	got := run(t, "solar/values-template-present", fixture.OCIResource("chart", "helmChart", "reg.local/catalog/chart:1"))
+	got := run(t, "solar/values-template-present", resources(t, fixture.OCIResource("chart", "helmChart", "reg.local/catalog/chart:1")))
 	if len(got) != 1 || !strings.Contains(got[0].Message, "air-gapped") {
 		t.Fatalf("findings = %+v", got)
 	}

@@ -3,20 +3,26 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/rebEllieous/ocm-lint-solar/lint"
 	"github.com/rebEllieous/ocm-lint-solar/report"
-	_ "github.com/rebEllieous/ocm-lint-solar/rules/all"
+	"github.com/rebEllieous/ocm-lint-solar/ruleset"
 )
 
-const usage = `usage: ocm-lint [--rule <pack|id>]... [--skip <id>]... [--allow-host <host>]...
+const usage = `usage: ocm-lint --rule <file>... [--skip <id>]... [--allow-host <host>]...
                 [--recursive] [-o text|json] <repo>//<component>:<version>...
-       ocm-lint --list-rules`
+       ocm-lint --rule <file>... [--skip <id>]... --list-rules`
+
+// referencesRule reports references that --recursive and air-gap/references-closed
+// leave to it.
+const referencesRule = "core/references-resolvable"
 
 func main() {
 	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
@@ -31,32 +37,46 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ocm-lint", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprintln(stderr, usage) }
-	var include, skip, allow list
-	fs.Var(&include, "rule", "add a pack or a single rule")
+	var ruleFiles, skip, allow list
+	fs.Var(&ruleFiles, "rule", "rule file; a later file replaces rules with the same ID")
 	fs.Var(&skip, "skip", "remove a rule")
 	fs.Var(&allow, "allow-host", "registry host treated as inside the repository")
 	recursive := fs.Bool("recursive", false, "also lint referenced components")
 	output := fs.String("o", "text", "output: text or json")
-	listRules := fs.Bool("list-rules", false, "print all rules")
+	listRules := fs.Bool("list-rules", false, "print the rules in the given files")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
+	fail := func(err error) int { fmt.Fprintln(stderr, "ocm-lint:", err); return 2 }
+	if len(ruleFiles) == 0 || (!*listRules && (fs.NArg() == 0 || (*output != "text" && *output != "json"))) {
+		fs.Usage()
+		return 2
+	}
+	rules, warnings, err := ruleset.Load(ruleFiles)
+	if err != nil {
+		return fail(err)
+	}
+	for _, w := range warnings {
+		fmt.Fprintln(stderr, "ocm-lint: warning:", w)
+	}
+	loaded := slices.ContainsFunc(rules, func(r lint.Rule) bool { return r.ID() == referencesRule })
+	if rules, err = ruleset.Skip(rules, skip); err != nil {
+		return fail(err)
+	}
+	if len(rules) == 0 {
+		return fail(errors.New("no rules left to run"))
+	}
+
 	if *listRules {
-		for _, r := range lint.Default.All() {
+		for _, r := range rules {
 			fmt.Fprintf(stdout, "%-40s %-5s %s\n", r.ID(), r.Severity(), r.Description())
 		}
 		return 0
 	}
 
-	fail := func(err error) int { fmt.Fprintln(stderr, "ocm-lint:", err); return 2 }
-	if fs.NArg() == 0 || (*output != "text" && *output != "json") {
-		fs.Usage()
-		return 2
-	}
-	rules, err := lint.Default.Select(include, skip)
-	if err != nil {
-		return fail(err)
+	if !loaded {
+		fmt.Fprintf(stderr, "ocm-lint: warning: %s is not loaded, so missing references may go unreported\n", referencesRule)
 	}
 	opts := lint.Options{AllowHosts: allow}
 

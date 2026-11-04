@@ -1,0 +1,53 @@
+# Rules for components delivered through Solution Arsenal.
+#
+# These rules mirror Solar code and can drift from it.
+rules:
+  - id: solar/single-helm-chart
+    severity: error
+    description: exactly one helmChart resource, with OCI access
+    check: >-
+      cel.bind(cs, component.resources.filter(r, r.type == "helmChart"),
+      cs.size() == 1 && cs[0].effectiveAccess.isOCI)
+    subject: >-
+      cel.bind(cs, component.resources.filter(r, r.type == "helmChart"),
+      cs.size() != 1 ? "component" : "resource " + cs[0].name)
+    message: >-
+      cel.bind(cs, component.resources.filter(r, r.type == "helmChart"),
+      cs.size() != 1
+      ? string(cs.size()) + " helmChart resources, Solar discovery needs exactly one and drops the component otherwise"
+      : cs[0].effectiveAccess.type == ""
+      ? "chart access cannot be read"
+      : "chart uses " + cs[0].effectiveAccess.type + " access, Solar needs it published as an OCI artifact")
+
+  - id: solar/values-template-present
+    severity: error
+    description: exactly one localBlob values template labelled for the chart
+    # With no single chart this passes; solar/single-helm-chart reports that.
+    check: >-
+      cel.bind(cs, component.resources.filter(r, r.type == "helmChart"),
+      cs.size() != 1 || cel.bind(ts, component.resources.filter(r, r.labels.exists(l,
+      l.name == "opendefense.cloud/helm/values-for" && l.value == cs[0].name)),
+      ts.size() == 1 && ts[0].access.isLocalBlob))
+    subject: >-
+      cel.bind(c, component.resources.filter(r, r.type == "helmChart")[0],
+      cel.bind(ts, component.resources.filter(r, r.labels.exists(l,
+      l.name == "opendefense.cloud/helm/values-for" && l.value == c.name)),
+      "resource " + (ts.size() == 1 ? ts[0].name : c.name)))
+    message: >-
+      cel.bind(c, component.resources.filter(r, r.type == "helmChart")[0],
+      cel.bind(n, component.resources.filter(r, r.labels.exists(l,
+      l.name == "opendefense.cloud/helm/values-for" && l.value == c.name)).size(),
+      n == 0
+      ? "no values template (label opendefense.cloud/helm/values-for=\"" + c.name + "\"): image references and imagePullSecrets are not relocated, so deployments on air-gapped targets or behind private registries fail to pull"
+      : n == 1
+      ? "values template must be a localBlob"
+      : string(n) + " values templates for this chart, want one"))
+
+  - id: solar/values-template-only-localblob
+    severity: error
+    description: localBlob is used only by the values template
+    forEach: component.resources
+    check: >-
+      !item.access.isLocalBlob || item.labels.exists(l,
+      l.name == "opendefense.cloud/helm/values-for" && type(l.value) == string)
+    message: '"localBlob access; only the values template may be a localBlob, publish this as an OCI artifact"'
