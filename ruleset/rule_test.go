@@ -1,6 +1,7 @@
 package ruleset_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestCheckFindings(t *testing.T) {
 }
 
 func TestRuleMetadata(t *testing.T) {
-	rules, _, err := ruleset.Load([]string{file(t, spec("id", "acme/x", "severity", "warn", "description", "the rule"))})
+	rules, _, err := ruleset.Load(context.Background(), []string{file(t, spec("id", "acme/x", "severity", "warn", "description", "the rule"))})
 	if err != nil {
 		t.Fatal(err)
 	}

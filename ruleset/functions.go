@@ -42,6 +42,7 @@ func bindings(ctx context.Context, t *lint.Target, adapter types.Adapter) cel.Pr
 			return adapter.NativeToValue(ps)
 		}}
 	}
+	//nolint:staticcheck // its replacement binds once per Env, but these capture the target and ctx of each Check
 	return cel.Functions(
 		list("schemaErrors", func() ([]Problem, error) { return schemaErrors(t), nil }),
 		list("identityErrors", func() ([]Problem, error) { return identityErrors(t), nil }),

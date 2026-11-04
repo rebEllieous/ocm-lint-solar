@@ -1,0 +1,33 @@
+version: 2
+
+project_name: ocm-lint
+
+builds:
+  - main: ./cmd/ocm-lint
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+# release-please creates the draft and writes its notes; this only adds the files.
+changelog:
+  disable: true
+
+# Immutable releases are on, so nothing can be added after publishing. The workflow
+# publishes last, and until then a failed job can be re-run.
+release:
+  draft: true
+  use_existing_draft: true
+  replace_existing_artifacts: true
+  mode: keep-existing

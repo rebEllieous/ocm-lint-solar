@@ -16,7 +16,7 @@ import (
 // problems runs a rule that reports every Problem the function returns.
 func problems(t *testing.T, fn string, tg *lint.Target) ([]lint.Finding, error) {
 	t.Helper()
-	rules, _, err := ruleset.Load([]string{file(t, spec("forEach", fn+"()", "check", "false", "subject", "item.subject", "message", "item.message"))})
+	rules, _, err := ruleset.Load(context.Background(), []string{file(t, spec("forEach", fn+"()", "check", "false", "subject", "item.subject", "message", "item.message"))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestExternalReason(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rules, _, err := ruleset.Load([]string{file(t, spec("check", `externalReason("`+tt.ref+`") == ""`, "message", `externalReason("`+tt.ref+`")`))})
+			rules, _, err := ruleset.Load(context.Background(), []string{file(t, spec("check", `externalReason("`+tt.ref+`") == ""`, "message", `externalReason("`+tt.ref+`")`))})
 			if err != nil {
 				t.Fatal(err)
 			}

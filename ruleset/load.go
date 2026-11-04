@@ -1,14 +1,15 @@
-// Package ruleset loads lint rules from YAML files. Their checks are CEL expressions.
+// Package ruleset loads lint rules from YAML rule files, which can be embedded, local
+// or at a URL. Their checks are CEL expressions.
 package ruleset
 
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 
@@ -19,13 +20,15 @@ import (
 	"github.com/rebEllieous/ocm-lint-solar/lint"
 )
 
-// Load parses and compiles rule files, sorted by ID. A rule replaces one with the
-// same ID from an earlier file. An ID in a pack that an earlier file used, but
-// matching nothing, is probably a mistyped override and gets a warning. err means
-// the files can't be trusted and nothing should run.
-func Load(paths []string) (rules []lint.Rule, warnings []string, err error) {
-	if len(paths) == 0 {
-		return nil, nil, errors.New("no rule files")
+// Load parses and compiles rule sources, sorted by ID. A source is "@<name>" for an
+// embedded file (see Aliases), an http(s) URL or a local path. A rule replaces one
+// with the same ID from an earlier source. An ID in a pack that an earlier source
+// used, but matching nothing, is probably a mistyped override and gets a warning.
+// Each URL also gets a notice there. err means the sources can't be trusted and
+// nothing should run.
+func Load(ctx context.Context, sources []string) (rules []lint.Rule, warnings []string, err error) {
+	if len(sources) == 0 {
+		return nil, nil, errors.New("no rule sources")
 	}
 	env, err := newEnv()
 	if err != nil {
@@ -33,14 +36,22 @@ func Load(paths []string) (rules []lint.Rule, warnings []string, err error) {
 	}
 	merged := map[string]lint.Rule{}
 	earlier := map[string]bool{}
-	for _, path := range paths {
-		rs, err := loadFile(env, path)
+	for _, source := range sources {
+		name := display(source)
+		b, notice, err := read(ctx, source)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", path, err)
+			return nil, nil, fmt.Errorf("%s: %w", name, err)
+		}
+		if notice != "" {
+			warnings = append(warnings, notice)
+		}
+		rs, err := parse(env, b)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", name, err)
 		}
 		for _, r := range rs {
 			if _, exists := merged[r.id]; !exists && earlier[pack(r.id)] {
-				warnings = append(warnings, fmt.Sprintf("%s: rule %q overrides nothing in pack %q; use your own pack for a new rule", path, r.id, pack(r.id)))
+				warnings = append(warnings, fmt.Sprintf("%s: rule %q overrides nothing in pack %q; use your own pack for a new rule", name, r.id, pack(r.id)))
 			}
 			merged[r.id] = r
 		}
@@ -56,11 +67,7 @@ func pack(id string) string {
 	return p
 }
 
-func loadFile(env *cel.Env, path string) ([]*rule, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func parse(env *cel.Env, b []byte) ([]*rule, error) {
 	if err := oneDocument(b); err != nil {
 		return nil, err
 	}

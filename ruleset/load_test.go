@@ -70,7 +70,7 @@ func TestLoadErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := file(t, tt.yaml)
-			_, _, err := ruleset.Load([]string{p})
+			_, _, err := ruleset.Load(context.Background(), []string{p})
 			if err == nil {
 				t.Fatal("no error")
 			}
@@ -80,7 +80,7 @@ func TestLoadErrors(t *testing.T) {
 		})
 	}
 	t.Run("missing path", func(t *testing.T) {
-		if _, _, err := ruleset.Load([]string{filepath.Join(t.TempDir(), "nope.yaml")}); err == nil {
+		if _, _, err := ruleset.Load(context.Background(), []string{filepath.Join(t.TempDir(), "nope.yaml")}); err == nil {
 			t.Fatal("no error")
 		}
 	})
@@ -110,7 +110,7 @@ func TestLoadRejectsMisspelledFields(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ruleset.Load([]string{file(t, spec(tt.kv...))})
+			_, _, err := ruleset.Load(context.Background(), []string{file(t, spec(tt.kv...))})
 			if err == nil || !strings.Contains(err.Error(), "undefined field") {
 				t.Fatalf("err = %v, want undefined field", err)
 			}
@@ -119,13 +119,13 @@ func TestLoadRejectsMisspelledFields(t *testing.T) {
 }
 
 func TestLoadNoPaths(t *testing.T) {
-	if _, _, err := ruleset.Load(nil); err == nil {
+	if _, _, err := ruleset.Load(context.Background(), nil); err == nil {
 		t.Fatal("no error")
 	}
 }
 
 func TestLoadSurroundingDocumentMarkers(t *testing.T) {
-	if _, _, err := ruleset.Load([]string{file(t, "---\n"+spec()+"---\n")}); err != nil {
+	if _, _, err := ruleset.Load(context.Background(), []string{file(t, "---\n"+spec()+"---\n")}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -142,7 +142,7 @@ func TestUnquotedBoolCheckMeansWhatItSays(t *testing.T) {
 // check loads one rule and runs it on a component with the given resources.
 func check(t *testing.T, yaml, resources string) ([]lint.Finding, error) {
 	t.Helper()
-	rules, _, err := ruleset.Load([]string{file(t, yaml)})
+	rules, _, err := ruleset.Load(context.Background(), []string{file(t, yaml)})
 	if err != nil {
 		t.Fatal(err)
 	}

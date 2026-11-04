@@ -10,7 +10,7 @@ import (
 )
 
 var load = sync.OnceValues(func() ([]lint.Rule, error) {
-	rules, _, err := ruleset.Load([]string{"core.yaml", "air-gap.yaml", "solar.yaml"})
+	rules, _, err := ruleset.Load(context.Background(), []string{"core.yaml", "air-gap.yaml", "solar.yaml"})
 	return rules, err
 })
 
