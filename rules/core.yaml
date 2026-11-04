@@ -1,0 +1,32 @@
+# Generic OCM rules.
+rules:
+  - id: core/schema-valid
+    severity: error
+    description: descriptor validates against the OCM v2 schema
+    forEach: schemaErrors()
+    check: "false"
+    subject: item.subject
+    message: item.message
+
+  - id: core/unique-identity
+    severity: error
+    description: no duplicate resource, source or reference identity
+    forEach: identityErrors()
+    check: "false"
+    subject: item.subject
+    message: item.message
+
+  - id: core/references-resolvable
+    severity: error
+    description: every component reference exists in the repository
+    forEach: unresolvedReferences()
+    check: "false"
+    subject: item.subject
+    message: item.message
+
+  - id: core/digest-present
+    severity: warn
+    description: every resource has a digest
+    forEach: component.resources
+    check: item.hasDigest
+    message: '"no digest"'

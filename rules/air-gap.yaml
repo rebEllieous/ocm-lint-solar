@@ -1,0 +1,38 @@
+# Rules for components that must work after a transfer into an isolated registry.
+rules:
+  - id: air-gap/no-relative-access
+    severity: error
+    description: no relativeOciReference access
+    forEach: component.resources
+    check: "!item.access.isRelative"
+    message: >-
+      "relativeOciReference \"" + item.access.reference + "\" is not supported by OCM v2 tooling and breaks after re-anchoring"
+
+  - id: air-gap/no-external-access
+    severity: error
+    description: OCI accesses point into the repository or an --allow-host
+    forEach: component.resources
+    check: >-
+      item.effectiveAccess.isLocalBlob || item.effectiveAccess.isRelative ||
+      ((item.effectiveAccess.isOCI || item.effectiveAccess.type == "ociBlob") &&
+      externalReason(item.effectiveAccess.imageReference) == "")
+    message: >-
+      item.effectiveAccess.isOCI || item.effectiveAccess.type == "ociBlob"
+      ? externalReason(item.effectiveAccess.imageReference)
+      : "access type " + item.effectiveAccess.type + " fetches from outside the repository"
+
+  - id: air-gap/reference-name-set
+    severity: error
+    description: local blobs holding OCI content have a referenceName
+    forEach: component.resources
+    check: '!item.access.holdsOCIContent || item.access.referenceName != ""'
+    message: >-
+      "local blob with OCI content (" + item.access.mediaType + ") has no referenceName, so a transfer cannot publish it"
+
+  - id: air-gap/references-closed
+    severity: error
+    description: indirect component references resolve within the repository
+    forEach: unresolvedTransitiveReferences()
+    check: "false"
+    subject: item.subject
+    message: item.message
