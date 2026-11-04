@@ -89,8 +89,11 @@ func Registry(t testing.TB, ds ...*descruntime.Descriptor) string {
 	srv := httptest.NewServer(registry.New())
 	t.Cleanup(srv.Close)
 	url := "http://" + strings.TrimPrefix(srv.URL, "http://") + "/test"
-	repo, err := ocirepo.NewFromOCIRepoV1(context.Background(), &ocispec.Repository{BaseUrl: url},
-		&auth.Client{}, oci.WithTempDir(t.TempDir()))
+	resolver, err := ocirepo.NewResolver(context.Background(), &auth.Client{}, &ocispec.Repository{BaseUrl: url})
+	if err != nil {
+		t.Fatalf("open registry: %v", err)
+	}
+	repo, err := oci.NewRepository(oci.WithTempDir(t.TempDir()), oci.WithResolver(resolver))
 	if err != nil {
 		t.Fatalf("open registry: %v", err)
 	}
