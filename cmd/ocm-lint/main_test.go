@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,5 +175,103 @@ func TestWarnings(t *testing.T) {
 				t.Fatalf("stderr has %q:\n%s", tt.notContain, errOut.String())
 			}
 		})
+	}
+}
+
+func cleanRepo(t *testing.T) string {
+	t.Helper()
+	clean := fixture.Descriptor(t, fixture.Component("acme.org/clean", "1.0.0",
+		withDigest(fixture.OCIResource("img", "ociImage", "ghcr.io/a/b:1")), ""))
+	return fixture.Registry(t, clean) + "//acme.org/clean:1.0.0"
+}
+
+func TestRuleAlias(t *testing.T) {
+	ref := cleanRepo(t)
+	t.Chdir(t.TempDir()) // no rules/ here: the alias must not need it
+
+	if code := run(context.Background(), []string{"--rule=@core", ref}, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	var out bytes.Buffer
+	if code := run(context.Background(), []string{"--rule=@core", "--list-rules"}, &out, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("--list-rules exit %d", code)
+	}
+	if !strings.Contains(out.String(), "core/schema-valid") {
+		t.Fatalf("--list-rules:\n%s", out.String())
+	}
+}
+
+func TestUnknownAliasExits2(t *testing.T) {
+	var errOut bytes.Buffer
+	if code := run(context.Background(), []string{"--rule=@nope", "--list-rules"}, &bytes.Buffer{}, &errOut); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(errOut.String(), "@solar") {
+		t.Fatalf("stderr: %s", errOut.String())
+	}
+}
+
+func TestFailedDownloadExits2(t *testing.T) {
+	missing := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(missing.Close)
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	var out, errOut bytes.Buffer
+	args := []string{"--rule=@core", "--rule=" + missing.URL + "/rules.yaml", closed.URL + "//acme.org/app:1.0.0"}
+	if code := run(context.Background(), args, &out, &errOut); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	// Naming only the 404 URL shows the failure came before any repository was opened.
+	if out.Len() != 0 || !strings.Contains(errOut.String(), missing.URL) || strings.Contains(errOut.String(), closed.URL) {
+		t.Fatalf("stdout %q, stderr %q", out.String(), errOut.String())
+	}
+}
+
+func TestURLNoticeGoesToStderr(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `rules:
+- id: t/r
+  severity: error
+  description: d
+  check: 'true'
+  message: '"m"'
+`)
+	}))
+	t.Cleanup(s.Close)
+	var out, errOut bytes.Buffer
+	if code := run(context.Background(), []string{"--rule=" + s.URL, "-o", "json", cleanRepo(t)}, &out, &errOut); code != 0 {
+		t.Fatalf("exit %d, stderr %s", code, errOut.String())
+	}
+	if !json.Valid(out.Bytes()) || !strings.Contains(errOut.String(), s.URL) {
+		t.Fatalf("stdout %q, stderr %q", out.String(), errOut.String())
+	}
+}
+
+func TestUsageListsAliases(t *testing.T) {
+	var errOut bytes.Buffer
+	if code := run(context.Background(), nil, &bytes.Buffer{}, &errOut); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, alias := range []string{"@core", "@air-gap", "@solar"} {
+		if !strings.Contains(errOut.String(), alias) {
+			t.Fatalf("usage misses %s: %s", alias, errOut.String())
+		}
+	}
+}
+
+func TestVersion(t *testing.T) {
+	old := version
+	t.Cleanup(func() { version = old })
+
+	version = "v9.9.9"
+	var out bytes.Buffer
+	if code := run(context.Background(), []string{"--version"}, &out, &bytes.Buffer{}); code != 0 || out.String() != "ocm-lint v9.9.9\n" {
+		t.Fatalf("exit %d, stdout %q", code, out.String())
+	}
+
+	version = ""
+	out.Reset()
+	if code := run(context.Background(), []string{"--version"}, &out, &bytes.Buffer{}); code != 0 || len(strings.TrimSpace(strings.TrimPrefix(out.String(), "ocm-lint "))) == 0 {
+		t.Fatalf("exit %d, stdout %q", code, out.String())
 	}
 }

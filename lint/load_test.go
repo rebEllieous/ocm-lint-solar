@@ -47,7 +47,7 @@ func TestOpenAndLoad(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer repo.Close()
+			defer func() { _ = repo.Close() }()
 
 			tg, err := repo.Target(ctx, "acme.org/app", "1.0.0", lint.Options{})
 			if err != nil {

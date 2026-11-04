@@ -1,6 +1,7 @@
 package ruleset_test
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -40,7 +41,7 @@ func TestLoadMerge(t *testing.T) {
 			for _, f := range tt.files {
 				paths = append(paths, file(t, f))
 			}
-			got, warnings, err := ruleset.Load(paths)
+			got, warnings, err := ruleset.Load(context.Background(), paths)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -65,7 +66,7 @@ func TestLoadMerge(t *testing.T) {
 
 func TestLoadSameFileTwice(t *testing.T) {
 	p := file(t, rule("solar/a", "d"))
-	got, warnings, err := ruleset.Load([]string{p, p})
+	got, warnings, err := ruleset.Load(context.Background(), []string{p, p})
 	if err != nil || len(warnings) != 0 || !slices.Equal(ids(got), []string{"solar/a"}) {
 		t.Fatalf("rules %v, warnings %v, err %v", ids(got), warnings, err)
 	}
@@ -73,14 +74,14 @@ func TestLoadSameFileTwice(t *testing.T) {
 
 func TestLoadSeveralNewRulesInOnePackFirstFile(t *testing.T) {
 	two := rule("solar/a", "d") + "- id: solar/b\n  severity: warn\n  description: d\n  check: \"true\"\n  message: '\"m\"'\n"
-	_, warnings, err := ruleset.Load([]string{file(t, two)})
+	_, warnings, err := ruleset.Load(context.Background(), []string{file(t, two)})
 	if err != nil || len(warnings) != 0 {
 		t.Fatalf("warnings %v, err %v", warnings, err)
 	}
 }
 
 func TestSkip(t *testing.T) {
-	rules, _, err := ruleset.Load([]string{file(t, rule("solar/a", "1")), file(t, rule("solar/a", "2")), file(t, rule("acme/b", "d"))})
+	rules, _, err := ruleset.Load(context.Background(), []string{file(t, rule("solar/a", "1")), file(t, rule("solar/a", "2")), file(t, rule("acme/b", "d"))})
 	if err != nil {
 		t.Fatal(err)
 	}

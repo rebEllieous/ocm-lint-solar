@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -16,9 +17,26 @@ import (
 	"github.com/rebEllieous/ocm-lint-solar/ruleset"
 )
 
-const usage = `usage: ocm-lint --rule <file>... [--skip <id>]... [--allow-host <host>]...
+const usage = `usage: ocm-lint --rule <source>... [--skip <id>]... [--allow-host <host>]...
                 [--recursive] [-o text|json] <repo>//<component>:<version>...
-       ocm-lint --rule <file>... [--skip <id>]... --list-rules`
+       ocm-lint --rule <source>... [--skip <id>]... --list-rules
+       ocm-lint --version
+
+A source is a local path, an http(s) URL or a built-in rule file: %s`
+
+// version is set at release builds.
+var version string
+
+// versionString falls back to what the go command recorded, which covers go install.
+func versionString() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 // referencesRule reports references that --recursive and air-gap/references-closed
 // leave to it.
@@ -36,24 +54,29 @@ func (l *list) Set(v string) error { *l = append(*l, v); return nil }
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ocm-lint", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.Usage = func() { fmt.Fprintln(stderr, usage) }
-	var ruleFiles, skip, allow list
-	fs.Var(&ruleFiles, "rule", "rule file; a later file replaces rules with the same ID")
+	fs.Usage = func() { fmt.Fprintf(stderr, usage+"\n", strings.Join(ruleset.Aliases(), ", ")) }
+	var ruleSources, skip, allow list
+	fs.Var(&ruleSources, "rule", "rule file: path, http(s) URL or @alias; a later one replaces rules with the same ID")
 	fs.Var(&skip, "skip", "remove a rule")
 	fs.Var(&allow, "allow-host", "registry host treated as inside the repository")
 	recursive := fs.Bool("recursive", false, "also lint referenced components")
 	output := fs.String("o", "text", "output: text or json")
 	listRules := fs.Bool("list-rules", false, "print the rules in the given files")
+	showVersion := fs.Bool("version", false, "print the version")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if *showVersion {
+		fmt.Fprintln(stdout, "ocm-lint", versionString())
+		return 0
+	}
 
 	fail := func(err error) int { fmt.Fprintln(stderr, "ocm-lint:", err); return 2 }
-	if len(ruleFiles) == 0 || (!*listRules && (fs.NArg() == 0 || (*output != "text" && *output != "json"))) {
+	if len(ruleSources) == 0 || (!*listRules && (fs.NArg() == 0 || (*output != "text" && *output != "json"))) {
 		fs.Usage()
 		return 2
 	}
-	rules, warnings, err := ruleset.Load(ruleFiles)
+	rules, warnings, err := ruleset.Load(ctx, ruleSources)
 	if err != nil {
 		return fail(err)
 	}
