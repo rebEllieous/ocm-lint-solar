@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/rebEllieous/ocm-lint-solar/compare/v0.1.0...v0.1.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **deps:** move to the merged OCM bindings module ([1f32ff5](https://github.com/rebEllieous/ocm-lint-solar/commit/1f32ff5d4c436c3ff4a4b52d74b646d76337e0c4))
+* **deps:** move to the merged OCM bindings module ([#5](https://github.com/rebEllieous/ocm-lint-solar/issues/5)) ([4ea7238](https://github.com/rebEllieous/ocm-lint-solar/commit/4ea7238d12a207c812e3a242016b23e2d8d68b3a))
+
 ## 0.1.0 (2026-11-04)
 
 
